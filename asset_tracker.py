@@ -59,14 +59,14 @@ def dsha256(b):
     return sha256(sha256(b).digest()).digest()
 
 
-def post_request(method: str, params):
+def post_request(session: requests.Session, method: str, params):
     data = {
         'jsonrpc':'2.0',
         'id':'0',
         'method': method,
         'params': params
     }
-    resp = requests.post(f'http://{USERNAME}:{PASSWORD}@localhost:{PORT}', data=json.dumps(data))
+    resp = session.post(f'http://{USERNAME}:{PASSWORD}@localhost:{PORT}', data=json.dumps(data))
     return resp.json()['result']
 
 
@@ -217,11 +217,11 @@ def is_invalid_asset_vout(script: bytes) -> Union[bool, str]:
                     return asset_name_bytes.decode() or True
     return False
 
-def check_chunk(start, end, bad_transaction_set, bad_asset_name_set):
+def check_chunk(session: requests.Session, start: int, end: int, bad_transaction_set, bad_asset_name_set):
     for local_height in range(start, end):
         try:
-            block_hash = post_request('getblockhash', [local_height])
-            block_hex = post_request('getblock', [block_hash, 0])
+            block_hash = post_request(session, 'getblockhash', [local_height])
+            block_hex = post_request(session, 'getblock', [block_hash, 0])
 
             b = bytes.fromhex(block_hex)
             
@@ -355,7 +355,9 @@ def check_chunk(start, end, bad_transaction_set, bad_asset_name_set):
 
 
 def main():
-    data = post_request('getblockchaininfo', [])
+    session = requests.Session()
+
+    data = post_request(session, 'getblockchaininfo', [])
     final_height = data['blocks']
 
     start_height = ASSET_START
@@ -371,7 +373,8 @@ def main():
 
     threads = []
     for i in range(NUM_THREADS):
-        thread = threading.Thread(target=lambda: check_chunk(start_height+i*count_per_thread, 
+        thread = threading.Thread(target=lambda: check_chunk(session,
+                                                             start_height+i*count_per_thread, 
                                                              start_height+(i+1)*count_per_thread, 
                                                              bad_txids, 
                                                              bad_assets))
